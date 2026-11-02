@@ -35,6 +35,28 @@ function rateLimit(req, res, next) {
   next();
 }
 
+
+// ---- Admin API token ----
+// Preferred: SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (Dev Dashboard app). A fresh token is
+// requested automatically and cached until shortly before it expires.
+// Fallback: a fixed SHOPIFY_ADMIN_ACCESS_TOKEN.
+let cached = { token: null, expires: 0 };
+async function getToken(store) {
+  const id = process.env.SHOPIFY_CLIENT_ID, secret = process.env.SHOPIFY_CLIENT_SECRET;
+  if (!id || !secret) return process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+  if (cached.token && Date.now() < cached.expires) return cached.token;
+  const r = await fetch(`https://${store}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: new URLSearchParams({ grant_type: 'client_credentials', client_id: id, client_secret: secret })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) throw new Error('Token request failed: ' + r.status + ' ' + JSON.stringify(j).slice(0, 200));
+  console.log('[order-tracking] token scopes:', j.scope);
+  cached = { token: j.access_token, expires: Date.now() + Math.max(60, (j.expires_in || 86400) - 300) * 1000 };
+  return cached.token;
+}
+
 const QUERY = `
 query($q: String!) {
   orders(first: 1, query: $q) {
@@ -58,11 +80,12 @@ router.post('/api/track-order', express.json({ limit: '2kb' }), rateLimit, async
     const store = (process.env.SHOPIFY_STORE || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     const r = await fetch(`https://${store}/admin/api/${API_VERSION}/graphql.json`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_ACCESS_TOKEN },
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': await getToken(store) },
       body: JSON.stringify({ query: QUERY, variables: { q: `name:#${num}` } })
     });
     const json = await r.json();
-    if (json.errors) { console.error('[order-tracking]', JSON.stringify(json.errors)); return res.status(502).json({ error: 'Order lookup is temporarily unavailable.' }); }
+    if (!r.ok) console.error('[order-tracking] HTTP', r.status, JSON.stringify(json).slice(0, 300));
+    if (json.errors || !json.data) { console.error('[order-tracking]', JSON.stringify(json.errors || json)); return res.status(502).json({ error: 'Order lookup is temporarily unavailable.' }); }
 
     const o = json.data.orders.nodes[0];
     // Same message for "no order" and "wrong email" so emails can't be probed.
