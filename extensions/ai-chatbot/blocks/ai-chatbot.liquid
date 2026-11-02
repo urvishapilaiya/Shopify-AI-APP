@@ -1,6 +1,7 @@
 <div
   id="ai-chatbot-root"
   data-shop-domain="{{ shop.permanent_domain }}"
+  data-order-api="{{ block.settings.api_url | escape }}"
 ></div>
 
 {% schema %}
@@ -9,6 +10,14 @@
   "target": "body",
   "javascript": "chatbot.js",
   "stylesheet": "chatbot.css",
-  "settings": []
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Order tracking backend URL",
+      "placeholder": "https://your-backend.onrender.com",
+      "info": "Same backend URL used by the Order Tracking page"
+    }
+  ]
 }
 {% endschema %}

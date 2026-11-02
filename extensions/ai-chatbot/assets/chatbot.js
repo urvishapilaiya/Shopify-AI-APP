@@ -10,6 +10,9 @@
     return;
   }
 
+  const orderApi = (root.dataset.orderApi || "").replace(/\/$/, "");
+  const orderState = { step: null, order: null };
+
   const endpoint =
     `https://${shopDomain}/api/2026-10/graphql.json`;
 
@@ -25,7 +28,7 @@
       <header class="ai-chat-header">
         <div>
           <strong>AI Shopping Assistant</strong>
-          <small>Ask about our products</small>
+          <small>Ask about products or track an order</small>
         </div>
         <button id="ai-chat-close">×</button>
       </header>
@@ -158,10 +161,104 @@
     messages.scrollTop = messages.scrollHeight;
   }
 
+
+  // ---------- order tracking ----------
+  const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+  const TRACK_RE = /\b(track|tracking|order status|where('| i)?s my (order|package|parcel)|my order|status of (my )?order|delivery status)\b/i;
+
+  function findOrderNumber(text) {
+    const m = text.replace(EMAIL_RE, "").match(/#?\b(\d{3,10})\b/);
+    return m ? m[1] : null;
+  }
+
+  async function lookupOrder(order, email) {
+    orderState.step = null;
+    orderState.order = null;
+
+    if (!orderApi) {
+      addMessage("Order tracking isn't set up yet. Please contact us for help.", "bot");
+      return;
+    }
+
+    addMessage("Checking your order...", "bot");
+
+    let res, data;
+    try {
+      res = await fetch(orderApi + "/api/track-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order, email })
+      });
+      data = await res.json();
+    } catch (e) {
+      addMessage("Sorry, I couldn't reach the order system. Please try again.", "bot");
+      return;
+    }
+
+    if (!res.ok) {
+      addMessage((data && data.error) || "Sorry, I couldn't find that order.", "bot");
+      return;
+    }
+
+    const status = data.cancelled ? "Cancelled" : data.statusLabel;
+    addMessage(`Order ${data.name}: ${status}.`, "bot");
+
+    data.shipments.forEach(s => {
+      if (!s.number && !s.url) return;
+      const item = document.createElement("div");
+      item.className = "ai-message bot";
+      item.appendChild(document.createTextNode(`${s.company || "Carrier"}: `));
+      if (/^https?:\/\//i.test(s.url || "")) {
+        const a = document.createElement("a");
+        a.href = s.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = s.number || "Track package";
+        item.appendChild(a);
+      } else {
+        item.appendChild(document.createTextNode(s.number || ""));
+      }
+      messages.appendChild(item);
+    });
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  // Returns true if the message was handled by the order flow.
+  async function handleOrderFlow(question) {
+    const email = (question.match(EMAIL_RE) || [])[0];
+    const number = findOrderNumber(question);
+
+    if (/\b(cancel|stop|never ?mind|forget it)\b/i.test(question) && orderState.step) {
+      orderState.step = null;
+      orderState.order = null;
+      addMessage("Okay, no problem. Anything else I can help with?", "bot");
+      return true;
+    }
+
+    if (!orderState.step && !TRACK_RE.test(question)) return false;
+
+    if (number) orderState.order = number;
+
+    if (!orderState.order) {
+      orderState.step = "order";
+      addMessage("Sure! What's your order number? (e.g. 1001)", "bot");
+      return true;
+    }
+    if (!email) {
+      orderState.step = "email";
+      addMessage("Thanks. What email address did you use at checkout?", "bot");
+      return true;
+    }
+    await lookupOrder(orderState.order, email);
+    return true;
+  }
+
   async function answerQuestion(question) {
     const normalized = question.toLowerCase();
 
     try {
+      if (await handleOrderFlow(question)) return;
+
       if (
         normalized.includes("how many") &&
         normalized.includes("product")
@@ -218,7 +315,7 @@
       }
 
       addMessage(
-        "I can currently answer questions about product counts and show products. Try asking: How many products do you have?",
+        "I can show products, count products, and track your order. Try: How many products do you have? or Track my order",
         "bot"
       );
 

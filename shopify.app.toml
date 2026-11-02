@@ -17,7 +17,7 @@ embedded_app_direct_api_access = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,read_inventory"
+scopes = "read_inventory,read_products,read_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
