@@ -1,0 +1,19 @@
+<div class="vs-block" data-vs-api="{{ block.settings.api_url | escape }}"></div>
+
+{% schema %}
+{
+  "target": "section",
+  "name": "Visual Search",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Backend API URL",
+      "placeholder": "https://your-backend.onrender.com",
+      "info": "Deployed HTTPS backend URL"
+    }
+  ],
+  "stylesheet": "visual-search.css",
+  "javascript": "visual-search.js"
+}
+{% endschema %}

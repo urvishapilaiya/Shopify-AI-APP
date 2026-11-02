@@ -1,0 +1,33 @@
+{
+  "name": "ai-learning",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "extensions/*"
+  ],
+  "scripts": {
+    "shopify": "shopify",
+    "build": "shopify app build",
+    "dev": "shopify app dev",
+    "info": "shopify app info",
+    "generate": "shopify app generate",
+    "deploy": "shopify app deploy",
+    "start": "node visual-search-server.js",
+    "build-index": "node build-index.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "node-fetch": "^2.7.0",
+    "sharp": "^0.35.5"
+  },
+  "trustedDependencies": [
+    "@shopify/plugin-cloudflare"
+  ],
+  "author": "urves",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}
